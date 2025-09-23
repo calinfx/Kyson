@@ -1,0 +1,16 @@
+{
+  "name": "My 3D Game",
+  "short_name": "My Game",
+  "description": "My PWA for 3D game mechanics.",
+  "start_url": "/index.html",
+  "display": "standalone",
+  "background_color": "#000000",
+  "theme_color": "#000000",
+  "icons": [
+    {
+      "src": "Cheese.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
