@@ -1,7 +1,7 @@
 // https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js
 /**
  * # Table of Contents
- * 1.00 - Setup: Scene, Camera, Renderer
+ * 1.01 - Setup: Scene, Camera, Renderer, and Version Overlay
  * 2.00 - Helper Functions
  * 3.00 - Data Generation and Geometry
  * 4.00 - Lighting and Aesthetics
@@ -9,13 +9,20 @@
  * 6.00 - Animation Loop
  */
 
-- - - >> 1.00 - Setup: Scene, Camera, Renderer
+- - - >> 1.01 - Setup: Scene, Camera, Renderer, and Version Overlay
 let scene, camera, renderer, controls;
 const container = document.body;
 
+function updateVersionOverlay(version) {
+    const overlay = document.getElementById('version-overlay');
+    if (overlay) {
+        overlay.innerText = 'Project Version: ' + version + ' | Status: Running';
+    }
+}
+
 function init() {
     scene = new THREE.Scene();
-1.00.00
+1.01.00
     // Camera Setup (Metric: field of view in degrees, aspect ratio, near, far in meters)
     camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
     camera.position.z = 100;
@@ -26,6 +33,10 @@ function init() {
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.setClearColor(0x000000, 1); // Black background
     container.appendChild(renderer.domElement);
+
+    // Update the HTML overlay to confirm script execution
+    updateVersionOverlay('1.01.00'); 
+1.01.01
 }
 
 - - - >> 2.00 - Helper Functions
