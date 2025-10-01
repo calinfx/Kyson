@@ -128,7 +128,21 @@ label {
   touch-action: none;
 }
 
-/* Turquoise highlight overlay on hovered objects */
+/* Version display */
+#version-display {
+  position: fixed;
+  bottom: 10px;
+  left: 10px;
+  background: rgba(0, 0, 0, 0.6);
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  color: turquoise;
+  user-select: none;
+  z-index: 100;
+}
+
+/* Turquoise highlight on hovered objects */
 .hovered-highlight {
   outline: 2px solid turquoise !important;
 }
