@@ -1,12 +1,8 @@
-// main.js - Mobile joystick and 3D desert environment with selection
-// Uses global THREE and OrbitControls loaded via script tags
+// main.js - 3D desert environment with mobile joystick controls, version display, and debug logs
 
 (() => {
-  // Check global THREE and OrbitControls
-  if (typeof THREE === 'undefined' || typeof THREE.OrbitControls === 'undefined') {
-    console.error('THREE or OrbitControls not loaded');
-    return;
-  }
+  const VERSION = '1.1';
+  console.log(`3D Desert Environment - Version ${VERSION}`);
 
   // Scene setup
   const scene = new THREE.Scene();
@@ -47,50 +43,4 @@
   directionalLight.shadow.camera.bottom = -50;
   directionalLight.shadow.mapSize.width = 2048;
   directionalLight.shadow.mapSize.height = 2048;
-  scene.add(directionalLight);
-
-  const ambientLight = new THREE.AmbientLight(0xffccaa, 0.3);
-  scene.add(ambientLight);
-
-  // Controls - OrbitControls for rotation/look
-  const controls = new THREE.OrbitControls(camera, renderer.domElement);
-  controls.enableDamping = true;
-  controls.dampingFactor = 0.1;
-  controls.minDistance = 5;
-  controls.maxDistance = 100;
-  controls.maxPolarAngle = Math.PI / 2 - 0.05;
-
-  // Objects container and spinning set
-  const objects = [];
-  const spinningObjects = new Set();
-
-  // UI elements
-  const primitiveSelect = document.getElementById('primitive-select');
-  const addPrimitiveBtn = document.getElementById('add-primitive-btn');
-  const applyTextureSelect = document.getElementById('apply-texture-select');
-  const applyTextureBtn = document.getElementById('apply-texture-btn');
-  const spinObjectsSelect = document.getElementById('spin-objects-select');
-  const toggleSpinBtn = document.getElementById('toggle-spin-btn');
-  const textureInput = document.getElementById('texture-input');
-  const capturePhotoBtn = document.getElementById('capture-photo-btn');
-  const video = document.getElementById('video');
-
-  // Texture loader
-  const textureLoader = new THREE.TextureLoader();
-
-  // Raycaster for selection
-  const raycaster = new THREE.Raycaster();
-
-  // Hover and selection tracking
-  let hoveredObject = null;
-  let selectedObject = null;
-
-  // Add object utility
-  function addObject(obj, name) {
-    obj.castShadow = true;
-    obj.receiveShadow = true;
-    scene.add(obj);
-    objects.push({ obj, name });
-
-    // Add to UI selects
-    const opt1 = document.create
+  scene.add(directionalLight
