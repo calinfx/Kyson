@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
-  <title>3D Desert Environment</title>
+  <title>3D Desert Environment with Mobile Controls</title>
   <link rel="stylesheet" href="style.css" />
   <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/examples/js/controls/OrbitControls.min.js"></script>
@@ -42,4 +42,22 @@
     <div>
       <label for="spin-objects-select">Toggle Spin On:</label>
       <select id="spin-objects-select">
-        <option value="">-- Select Object
+        <option value="">-- Select Object --</option>
+      </select>
+      <button id="toggle-spin-btn">Toggle Spin</button>
+    </div>
+  </div>
+
+  <div id="crosshair"></div>
+
+  <!-- Joystick container -->
+  <div id="joystick-container">
+    <div id="joystick-base"></div>
+    <div id="joystick-stick"></div>
+  </div>
+
+  <video id="video" autoplay playsinline style="display:none;"></video>
+
+  <script src="main.js"></script>
+</body>
+</html>
