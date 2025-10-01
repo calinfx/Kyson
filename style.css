@@ -1,14 +1,15 @@
-/* Reset and base */
+/* Base styles */
 
 body, html {
   margin: 0;
   padding: 0;
   overflow: hidden;
   height: 100vh;
-  background: linear-gradient(#d94e3e, #b35f3b); /* Mars desert gradient */
+  background: linear-gradient(to top, #b35f3b 0%, #e0814c 60%, #f7c27a 100%);
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen,
     Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
   color: #fff;
+  cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24"><circle cx="12" cy="12" r="10" stroke="turquoise" stroke-width="2" fill="none"/></svg>') 12 12, auto;
 }
 
 #ui {
@@ -16,7 +17,7 @@ body, html {
   top: 10px;
   left: 10px;
   right: 10px;
-  background: rgba(60, 30, 15, 0.8);
+  background: rgba(60, 30, 15, 0.85);
   padding: 10px;
   border-radius: 8px;
   font-size: 14px;
@@ -57,6 +58,81 @@ label {
   white-space: nowrap;
 }
 
+/* Crosshair */
+#crosshair {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  width: 24px;
+  height: 24px;
+  margin-left: -12px;
+  margin-top: -12px;
+  pointer-events: none;
+  z-index: 20;
+}
+
+#crosshair:before, #crosshair:after {
+  content: '';
+  position: absolute;
+  background: turquoise;
+  border-radius: 2px;
+}
+
+#crosshair:before {
+  left: 11px;
+  top: 0;
+  width: 2px;
+  height: 24px;
+}
+
+#crosshair:after {
+  top: 11px;
+  left: 0;
+  width: 24px;
+  height: 2px;
+}
+
+/* Joystick styles */
+#joystick-container {
+  position: fixed;
+  bottom: 30px;
+  left: 30px;
+  width: 120px;
+  height: 120px;
+  touch-action: none;
+  user-select: none;
+  z-index: 20;
+}
+
+#joystick-base {
+  position: absolute;
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.15);
+  border: 2px solid turquoise;
+  box-sizing: border-box;
+  touch-action: none;
+}
+
+#joystick-stick {
+  position: absolute;
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  background: turquoise;
+  top: 30px;
+  left: 30px;
+  touch-action: none;
+  transition: background 0.2s ease;
+  touch-action: none;
+}
+
+/* Turquoise highlight overlay on hovered objects */
+.hovered-highlight {
+  outline: 2px solid turquoise !important;
+}
+
 /* Responsive for iPhone */
 @media (max-width: 480px) {
   #ui {
@@ -67,5 +143,19 @@ label {
   #ui > div {
     width: 100%;
     justify-content: space-between;
+  }
+  #joystick-container {
+    width: 100px;
+    height: 100px;
+  }
+  #joystick-base {
+    width: 100px;
+    height: 100px;
+  }
+  #joystick-stick {
+    width: 50px;
+    height: 50px;
+    top: 25px;
+    left: 25px;
   }
 }
