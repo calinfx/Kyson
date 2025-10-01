@@ -1,15 +1,15 @@
 // https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js
 /**
  * # Table of Contents
- * 1.03 - Setup: Scene, Camera, Renderer, and Version Overlay (Renderer Fix)
+ * 1.05 - Setup: Scene, Camera, Renderer (Force LookAt Fix)
  * 2.00 - Helper Functions
- * 3.00 - Data Generation and Geometry
+ * 3.00 - Data Generation and Geometry (Increased Particle Size & Background Mesh)
  * 4.00 - Lighting and Aesthetics
  * 5.00 - Controls and Responsiveness
- * 6.00 - Animation Loop
+ * 6.00 - Animation Loop (Initial Rotation Fix)
  */
 
-- - - >> 1.03 - Setup: Scene, Camera, Renderer, and Version Overlay (Renderer Fix)
+- - - >> 1.05 - Setup: Scene, Camera, Renderer (Force LookAt Fix)
 let scene, camera, renderer, controls;
 const container = document.body;
 
@@ -23,16 +23,20 @@ function updateVersionOverlay(version, status) {
 function init() {
     try {
         scene = new THREE.Scene();
-1.03.00
+1.05.00
+        // ADD FOG for a dreamy, deep-space effect and better depth
+        scene.fog = new THREE.Fog(0x000000, 1, 150);
+        
         // Camera Setup (Metric: field of view in degrees, aspect ratio, near, far in meters)
         camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-        camera.position.z = 100;
+        camera.position.z = 80; // Camera closer
+        camera.lookAt(scene.position); // CRITICAL FIX: Ensure camera is looking at the center (0,0,0)
 
         // Renderer Setup - CRITICAL MOBILE FIXES APPLIED HERE
         renderer = new THREE.WebGLRenderer({
             antialias: true,
-            alpha: false, // <-- FIX: Set alpha to false. Sometimes true causes black screen.
-            powerPreference: "high-performance" // <-- FIX: Force GPU to engage
+            alpha: false, 
+            powerPreference: "high-performance" 
         });
         renderer.setPixelRatio(window.devicePixelRatio);
         renderer.setSize(window.innerWidth, window.innerHeight);
@@ -40,10 +44,10 @@ function init() {
         container.appendChild(renderer.domElement);
 
         // Update the HTML overlay to confirm script execution
-        updateVersionOverlay('1.03.00', 'Initialized'); 
-1.03.01
+        updateVersionOverlay('1.05.00', 'Initialized'); 
+1.05.01
     } catch (error) {
-        updateVersionOverlay('1.03.00', 'ERROR');
+        updateVersionOverlay('1.05.00', 'ERROR');
         console.error("Initialization Failed:", error);
     }
 }
@@ -60,7 +64,7 @@ function getPointOnTorus(radius, tube, radialSegments, tubularSegments, i) {
     return { x, y, z };
 }
 
-- - - >> 3.00 - Data Generation and Geometry
+- - - >> 3.00 - Data Generation and Geometry (Increased Particle Size & Background Mesh)
 const DATA_POINTS_COUNT = 500;
 const data = [];
 const positions = new Float32Array(DATA_POINTS_COUNT * 3);
@@ -111,15 +115,27 @@ geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
 
 // Material for the glowing particles
 const material = new THREE.PointsMaterial({
-    size: 0.8, // Metric: Size in meters (relative to camera distance)
+    size: 5.0, // Increased size for visibility
     vertexColors: true,
-    sizeAttenuation: true, // Optimizes for mobile by sizing points based on distance
+    sizeAttenuation: true, 
     transparent: true,
     opacity: 0.8
 });
 
 const dataPoints = new THREE.Points(geometry, material);
 scene.add(dataPoints);
+
+// Add a large, subtle sphere for background reference
+const backgroundGeometry = new THREE.SphereGeometry(65, 32, 32);
+const backgroundMaterial = new THREE.MeshBasicMaterial({
+    color: 0x9900FF, // Neon Purple
+    wireframe: true,
+    transparent: true,
+    opacity: 0.05 // Very subtle
+});
+const backgroundSphere = new THREE.Mesh(backgroundGeometry, backgroundMaterial);
+scene.add(backgroundSphere);
+3.01.00
 
 - - - >> 4.00 - Lighting and Aesthetics
 // Ambient Light for overall soft glow
@@ -149,9 +165,9 @@ function setupControls() {
         controls.screenSpacePanning = false;
         controls.minDistance = 20;
         controls.maxDistance = 200;
-        updateVersionOverlay('1.03.00', 'Controls Active');
+        updateVersionOverlay('1.05.00', 'Controls Active');
     } else {
-        updateVersionOverlay('1.03.00', 'Controls FAIL');
+        updateVersionOverlay('1.05.00', 'Controls FAIL');
         console.warn("OrbitControls not loaded! Interaction disabled.");
     }
 }
@@ -166,7 +182,7 @@ function onWindowResize() {
 
 window.addEventListener('resize', onWindowResize, false);
 
-- - - >> 6.00 - Animation Loop
+- - - >> 6.00 - Animation Loop (Initial Rotation Fix)
 let clock = new THREE.Clock();
 
 function animate() {
@@ -178,6 +194,9 @@ function animate() {
     dataPoints.rotation.y += 0.1 * delta;
 6.00.00
     dataPoints.rotation.x += 0.05 * delta;
+    
+    // Rotate the background sphere slowly
+    backgroundSphere.rotation.y -= 0.02 * delta;
 
     // Move the purple light for dynamic effect
     pointLight.position.x = 75 * Math.cos(clock.getElapsedTime() * 0.5);
@@ -186,6 +205,10 @@ function animate() {
     controls.update(); // only required if controls.enableDamping is set to true
     renderer.render(scene, camera);
 }
+
+// Initial setup to guarantee a non-zero starting view (Added in V1.05)
+dataPoints.rotation.y = Math.PI / 4; // Rotate 45 degrees
+dataPoints.rotation.x = Math.PI / 8; // Rotate 22.5 degrees
 
 // Initialize and Start
 init();
