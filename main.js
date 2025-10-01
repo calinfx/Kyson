@@ -1,217 +1,275 @@
-// https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js
-/**
- * # Table of Contents
- * 1.05 - Setup: Scene, Camera, Renderer (Force LookAt Fix)
- * 2.00 - Helper Functions
- * 3.00 - Data Generation and Geometry (Increased Particle Size & Background Mesh)
- * 4.00 - Lighting and Aesthetics
- * 5.00 - Controls and Responsiveness
- * 6.00 - Animation Loop (Initial Rotation Fix)
- */
+// Main 3D environment setup with desert colors, lighting, shadows, touch controls optimized for iPhone,
+// ability to add primitives, apply textures from photo or file, toggle slow spin on objects.
 
-- - - >> 1.05 - Setup: Scene, Camera, Renderer (Force LookAt Fix)
-let scene, camera, renderer, controls;
-const container = document.body;
+import * as THREE from 'three';
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 
-function updateVersionOverlay(version, status) {
-    const overlay = document.getElementById('version-overlay');
-    if (overlay) {
-        overlay.innerText = 'Project Version: ' + version + ' | Status: ' + status;
+(() => {
+  // Scene setup
+  const scene = new THREE.Scene();
+
+  // Desert floor color (Mars/Sahara)
+  const desertColor = 0xcc6633;
+  const desertGround = new THREE.Mesh(
+    new THREE.PlaneGeometry(1000, 1000),
+    new THREE.MeshStandardMaterial({ color: desertColor })
+  );
+  desertGround.rotation.x = -Math.PI / 2;
+  desertGround.receiveShadow = true;
+  scene.add(desertGround);
+
+  // Camera setup
+  const camera = new THREE.PerspectiveCamera(
+    60,
+    window.innerWidth / window.innerHeight,
+    0.1,
+    2000
+  );
+  camera.position.set(0, 15, 25);
+
+  // Renderer setup
+  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.setClearColor(0xb35f3b); // Martian sky color
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  document.body.appendChild(renderer.domElement);
+
+  // Lighting
+  const directionalLight = new THREE.DirectionalLight(0xffa95c, 1.2);
+  directionalLight.position.set(40, 60, 20);
+  directionalLight.castShadow = true;
+  directionalLight.shadow.camera.left = -50;
+  directionalLight.shadow.camera.right = 50;
+  directionalLight.shadow.camera.top = 50;
+  directionalLight.shadow.camera.bottom = -50;
+  directionalLight.shadow.mapSize.width = 2048;
+  directionalLight.shadow.mapSize.height = 2048;
+  scene.add(directionalLight);
+
+  const ambientLight = new THREE.AmbientLight(0xffccaa, 0.3);
+  scene.add(ambientLight);
+
+  // Controls optimized for touch (OrbitControls supports touch)
+  const controls = new OrbitControls(camera, renderer.domElement);
+  controls.enableDamping = true;
+  controls.dampingFactor = 0.1;
+  controls.minDistance = 5;
+  controls.maxDistance = 100;
+  controls.maxPolarAngle = Math.PI / 2 - 0.05; // Prevent going below ground
+
+  // Objects container
+  const objects = [];
+  const spinningObjects = new Set();
+
+  // Primitive creation parameters
+  const primitiveSelect = document.getElementById('primitive-select');
+  const addPrimitiveBtn = document.getElementById('add-primitive-btn');
+  const applyTextureSelect = document.getElementById('apply-texture-select');
+  const applyTextureBtn = document.getElementById('apply-texture-btn');
+  const spinObjectsSelect = document.getElementById('spin-objects-select');
+  const toggleSpinBtn = document.getElementById('toggle-spin-btn');
+  const textureInput = document.getElementById('texture-input');
+  const capturePhotoBtn = document.getElementById('capture-photo-btn');
+  const video = document.getElementById('video');
+
+  // Texture loader
+  const textureLoader = new THREE.TextureLoader();
+
+  // Utility: Add object to scene and UI selects
+  function addObject(obj, name) {
+    obj.castShadow = true;
+    obj.receiveShadow = true;
+    scene.add(obj);
+    objects.push({ obj, name });
+
+    // Add to selects
+    const opt1 = document.createElement('option');
+    opt1.value = name;
+    opt1.textContent = name;
+    applyTextureSelect.appendChild(opt1);
+
+    const opt2 = document.createElement('option');
+    opt2.value = name;
+    opt2.textContent = name;
+    spinObjectsSelect.appendChild(opt2);
+  }
+
+  // Create primitive mesh by type
+  function createPrimitive(type) {
+    let geometry;
+    switch (type) {
+      case 'box':
+        geometry = new THREE.BoxGeometry(3, 3, 3);
+        break;
+      case 'sphere':
+        geometry = new THREE.SphereGeometry(1.5, 32, 32);
+        break;
+      case 'cone':
+        geometry = new THREE.ConeGeometry(1.5, 4, 32);
+        break;
+      case 'cylinder':
+        geometry = new THREE.CylinderGeometry(1.5, 1.5, 4, 32);
+        break;
+      case 'plane':
+        geometry = new THREE.PlaneGeometry(4, 3);
+        break;
+      default:
+        geometry = new THREE.BoxGeometry(3, 3, 3);
     }
-}
 
-function init() {
-    try {
-        scene = new THREE.Scene();
-1.05.00
-        // ADD FOG for a dreamy, deep-space effect and better depth
-        scene.fog = new THREE.Fog(0x000000, 1, 150);
-        
-        // Camera Setup (Metric: field of view in degrees, aspect ratio, near, far in meters)
-        camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-        camera.position.z = 80; // Camera closer
-        camera.lookAt(scene.position); // CRITICAL FIX: Ensure camera is looking at the center (0,0,0)
-
-        // Renderer Setup - CRITICAL MOBILE FIXES APPLIED HERE
-        renderer = new THREE.WebGLRenderer({
-            antialias: true,
-            alpha: false, 
-            powerPreference: "high-performance" 
-        });
-        renderer.setPixelRatio(window.devicePixelRatio);
-        renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.setClearColor(0x000000, 1); // Black background
-        container.appendChild(renderer.domElement);
-
-        // Update the HTML overlay to confirm script execution
-        updateVersionOverlay('1.05.00', 'Initialized'); 
-1.05.01
-    } catch (error) {
-        updateVersionOverlay('1.05.00', 'ERROR');
-        console.error("Initialization Failed:", error);
-    }
-}
-
-- - - >> 2.00 - Helper Functions
-// Function to generate a point on a Torus (organic, curved shape)
-function getPointOnTorus(radius, tube, radialSegments, tubularSegments, i) {
-    const u = (i / tubularSegments) * Math.PI * 2;
-2.00.00
-    const v = (i / radialSegments) * Math.PI * 2;
-    const x = (radius + tube * Math.cos(v)) * Math.cos(u);
-    const y = (radius + tube * Math.cos(v)) * Math.sin(u);
-    const z = tube * Math.sin(v);
-    return { x, y, z };
-}
-
-- - - >> 3.00 - Data Generation and Geometry (Increased Particle Size & Background Mesh)
-const DATA_POINTS_COUNT = 500;
-const data = [];
-const positions = new Float32Array(DATA_POINTS_COUNT * 3);
-const colors = new Float32Array(DATA_POINTS_COUNT * 3);
-const color1 = new THREE.Color(0x9900FF); // Neon Purple
-const color2 = new THREE.Color(0x00FFFF); // Turquoise
-const color3 = new THREE.Color(0x39FF14); // Neon Green
-const radius = 50; // Metric: Radius in meters
-const tube = 10;   // Metric: Tube radius in meters
-
-for (let i = 0; i < DATA_POINTS_COUNT; i++) {
-    const point = getPointOnTorus(radius, tube, DATA_POINTS_COUNT, DATA_POINTS_COUNT, i);
-3.00.00
-    // Introduce a slight random offset for a 'dreamy, trippy' cloud effect
-    point.x += (Math.random() - 0.5) * tube * 2;
-    point.y += (Math.random() - 0.5) * tube * 2;
-    point.z += (Math.random() - 0.5) * tube * 2;
-
-    data.push({
-        x: point.x,
-        y: point.y,
-        z: point.z,
-        value: Math.random() // Dummy value
+    const material = new THREE.MeshStandardMaterial({
+      color: 0xd17e4f,
+      roughness: 0.8,
+      metalness: 0.1,
     });
 
-    // Populate BufferGeometry arrays
-    positions[i * 3]     = point.x;
-    positions[i * 3 + 1] = point.y;
-    positions[i * 3 + 2] = point.z;
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.position.set(
+      (Math.random() - 0.5) * 30,
+      geometry.parameters.height ? geometry.parameters.height / 2 : 1.5,
+      (Math.random() - 0.5) * 30
+    );
+    return mesh;
+  }
 
-    // Assign a color based on the point's Z-position to blend the neon colors
-    let color = new THREE.Color();
-    if (point.z > 0) {
-        color.lerpColors(color1, color2, (point.z / tube) * 0.5 + 0.5);
+  // Add primitive button handler
+  addPrimitiveBtn.addEventListener('click', () => {
+    const type = primitiveSelect.value;
+    const mesh = createPrimitive(type);
+    const name = `obj${objects.length + 1}_${type}`;
+    mesh.name = name;
+    addObject(mesh, name);
+  });
+
+  // Apply texture from image file input
+  let loadedTexture = null;
+
+  textureInput.addEventListener('change', (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+    const url = URL.createObjectURL(file);
+    textureLoader.load(
+      url,
+      (texture) => {
+        loadedTexture = texture;
+        URL.revokeObjectURL(url);
+        alert('Texture loaded. Select an object and click "Apply Texture"');
+      },
+      undefined,
+      (err) => {
+        alert('Error loading texture image.');
+      }
+    );
+  });
+
+  // Apply texture button handler
+  applyTextureBtn.addEventListener('click', () => {
+    const objName = applyTextureSelect.value;
+    if (!objName) {
+      alert('Please select an object to apply texture.');
+      return;
+    }
+    if (!loadedTexture) {
+      alert('Please load a texture image first.');
+      return;
+    }
+    const objectData = objects.find((o) => o.name === objName);
+    if (!objectData) return;
+
+    objectData.obj.material.map = loadedTexture;
+    objectData.obj.material.needsUpdate = true;
+  });
+
+  // Spin toggle button handler
+  toggleSpinBtn.addEventListener('click', () => {
+    const objName = spinObjectsSelect.value;
+    if (!objName) {
+      alert('Please select an object to toggle spin.');
+      return;
+    }
+    const objData = objects.find((o) => o.name === objName);
+    if (!objData) return;
+
+    if (spinningObjects.has(objData.obj)) {
+      spinningObjects.delete(objData.obj);
     } else {
-        color.lerpColors(color2, color3, (Math.abs(point.z) / tube) * 0.5 + 0.5);
+      spinningObjects.add(objData.obj);
+    }
+  });
+
+  // Capture photo button handler
+  capturePhotoBtn.addEventListener('click', async () => {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      alert('Camera API not supported on this device.');
+      return;
     }
 
-    colors[i * 3]     = color.r;
-    colors[i * 3 + 1] = color.g;
-    colors[i * 3 + 2] = color.b;
-3.00.01
-}
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+      video.srcObject = stream;
 
-const geometry = new THREE.BufferGeometry();
-geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+      // Show video briefly for capture
+      video.style.display = 'block';
 
-// Material for the glowing particles
-const material = new THREE.PointsMaterial({
-    size: 5.0, // Increased size for visibility
-    vertexColors: true,
-    sizeAttenuation: true, 
-    transparent: true,
-    opacity: 0.8
-});
+      // Wait for video to be ready
+      await new Promise((res) => {
+        video.onloadedmetadata = () => res();
+      });
 
-const dataPoints = new THREE.Points(geometry, material);
-scene.add(dataPoints);
+      // Capture frame to canvas
+      const canvas = document.createElement('canvas');
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-// Add a large, subtle sphere for background reference
-const backgroundGeometry = new THREE.SphereGeometry(65, 32, 32);
-const backgroundMaterial = new THREE.MeshBasicMaterial({
-    color: 0x9900FF, // Neon Purple
-    wireframe: true,
-    transparent: true,
-    opacity: 0.05 // Very subtle
-});
-const backgroundSphere = new THREE.Mesh(backgroundGeometry, backgroundMaterial);
-scene.add(backgroundSphere);
-3.01.00
+      // Stop video stream
+      stream.getTracks().forEach((track) => track.stop());
+      video.style.display = 'none';
 
-- - - >> 4.00 - Lighting and Aesthetics
-// Ambient Light for overall soft glow
-const ambientLight = new THREE.AmbientLight(0x404040, 0.5); // Soft white light
-scene.add(ambientLight);
-4.00.00
-
-// Point Light for enhanced glow effect (Neon Purple)
-const pointLight = new THREE.PointLight(0xAA00FF, 5, 200); // Color, Intensity, Distance
-pointLight.position.set(50, 50, 50);
-scene.add(pointLight);
-
-// Secondary Point Light (Turquoise)
-const pointLight2 = new THREE.PointLight(0x00FFFF, 3, 150);
-pointLight2.position.set(-50, -50, -50);
-scene.add(pointLight2);
-
-- - - >> 5.00 - Controls and Responsiveness
-// OrbitControls optimized for mobile/touch
-function setupControls() {
-    // Requires THREE.js OrbitControls to be included (now verified via CDN)
-    if (typeof THREE.OrbitControls !== 'undefined') {
-        controls = new THREE.OrbitControls(camera, renderer.domElement);
-5.00.00
-        controls.enableDamping = true; // Smooth motion
-        controls.dampingFactor = 0.05;
-        controls.screenSpacePanning = false;
-        controls.minDistance = 20;
-        controls.maxDistance = 200;
-        updateVersionOverlay('1.05.00', 'Controls Active');
-    } else {
-        updateVersionOverlay('1.05.00', 'Controls FAIL');
-        console.warn("OrbitControls not loaded! Interaction disabled.");
+      // Load texture from canvas
+      const dataUrl = canvas.toDataURL();
+      textureLoader.load(
+        dataUrl,
+        (texture) => {
+          loadedTexture = texture;
+          alert('Photo captured and texture loaded. Select an object and click "Apply Texture".');
+        },
+        undefined,
+        (err) => {
+          alert('Failed to load texture from photo.');
+        }
+      );
+    } catch (e) {
+      alert('Camera access denied or error occurred.');
     }
-}
+  });
 
-// Responsiveness: Handle screen rotation and resizing
-function onWindowResize() {
-    camera.aspect = window.innerWidth / window.innerHeight;
-    camera.updateProjectionMatrix();
-    renderer.setSize(window.innerWidth, window.innerHeight);
-5.00.01
-}
+  // Animate loop
+  const clock = new THREE.Clock();
 
-window.addEventListener('resize', onWindowResize, false);
-
-- - - >> 6.00 - Animation Loop (Initial Rotation Fix)
-let clock = new THREE.Clock();
-
-function animate() {
+  function animate() {
     requestAnimationFrame(animate);
 
+    controls.update();
+
+    // Rotate spinning objects slowly
     const delta = clock.getDelta();
+    spinningObjects.forEach((obj) => {
+      obj.rotation.y += delta * 0.2;
+    });
 
-    // Subtle rotation of the entire data cloud for a dreamy effect
-    dataPoints.rotation.y += 0.1 * delta;
-6.00.00
-    dataPoints.rotation.x += 0.05 * delta;
-    
-    // Rotate the background sphere slowly
-    backgroundSphere.rotation.y -= 0.02 * delta;
-
-    // Move the purple light for dynamic effect
-    pointLight.position.x = 75 * Math.cos(clock.getElapsedTime() * 0.5);
-    pointLight.position.z = 75 * Math.sin(clock.getElapsedTime() * 0.5);
-
-    controls.update(); // only required if controls.enableDamping is set to true
     renderer.render(scene, camera);
-}
+  }
 
-// Initial setup to guarantee a non-zero starting view (Added in V1.05)
-dataPoints.rotation.y = Math.PI / 4; // Rotate 45 degrees
-dataPoints.rotation.x = Math.PI / 8; // Rotate 22.5 degrees
+  animate();
 
-// Initialize and Start
-init();
-setupControls();
-animate();
-// https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js
+  // Handle window resize
+  window.addEventListener('resize', () => {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+
+    renderer.setSize(window.innerWidth, window.innerHeight);
+  });
+})();
