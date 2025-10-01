@@ -1,7 +1,7 @@
 // https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js
 /**
  * # Table of Contents
- * 1.01 - Setup: Scene, Camera, Renderer, and Version Overlay
+ * 1.03 - Setup: Scene, Camera, Renderer, and Version Overlay (Renderer Fix)
  * 2.00 - Helper Functions
  * 3.00 - Data Generation and Geometry
  * 4.00 - Lighting and Aesthetics
@@ -9,34 +9,43 @@
  * 6.00 - Animation Loop
  */
 
-- - - >> 1.01 - Setup: Scene, Camera, Renderer, and Version Overlay
+- - - >> 1.03 - Setup: Scene, Camera, Renderer, and Version Overlay (Renderer Fix)
 let scene, camera, renderer, controls;
 const container = document.body;
 
-function updateVersionOverlay(version) {
+function updateVersionOverlay(version, status) {
     const overlay = document.getElementById('version-overlay');
     if (overlay) {
-        overlay.innerText = 'Project Version: ' + version + ' | Status: Running';
+        overlay.innerText = 'Project Version: ' + version + ' | Status: ' + status;
     }
 }
 
 function init() {
-    scene = new THREE.Scene();
-1.01.00
-    // Camera Setup (Metric: field of view in degrees, aspect ratio, near, far in meters)
-    camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-    camera.position.z = 100;
+    try {
+        scene = new THREE.Scene();
+1.03.00
+        // Camera Setup (Metric: field of view in degrees, aspect ratio, near, far in meters)
+        camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.z = 100;
 
-    // Renderer Setup - Dark Mode Ready
-    renderer = new THREE.WebGLRenderer({ antialias: true });
-    renderer.setPixelRatio(window.devicePixelRatio);
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.setClearColor(0x000000, 1); // Black background
-    container.appendChild(renderer.domElement);
+        // Renderer Setup - CRITICAL MOBILE FIXES APPLIED HERE
+        renderer = new THREE.WebGLRenderer({
+            antialias: true,
+            alpha: false, // <-- FIX: Set alpha to false. Sometimes true causes black screen.
+            powerPreference: "high-performance" // <-- FIX: Force GPU to engage
+        });
+        renderer.setPixelRatio(window.devicePixelRatio);
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setClearColor(0x000000, 1); // Black background
+        container.appendChild(renderer.domElement);
 
-    // Update the HTML overlay to confirm script execution
-    updateVersionOverlay('1.01.00'); 
-1.01.01
+        // Update the HTML overlay to confirm script execution
+        updateVersionOverlay('1.03.00', 'Initialized'); 
+1.03.01
+    } catch (error) {
+        updateVersionOverlay('1.03.00', 'ERROR');
+        console.error("Initialization Failed:", error);
+    }
 }
 
 - - - >> 2.00 - Helper Functions
@@ -131,7 +140,7 @@ scene.add(pointLight2);
 - - - >> 5.00 - Controls and Responsiveness
 // OrbitControls optimized for mobile/touch
 function setupControls() {
-    // Requires THREE.js OrbitControls to be included (assumed to be available in Codepen via CDN)
+    // Requires THREE.js OrbitControls to be included (now verified via CDN)
     if (typeof THREE.OrbitControls !== 'undefined') {
         controls = new THREE.OrbitControls(camera, renderer.domElement);
 5.00.00
@@ -140,7 +149,10 @@ function setupControls() {
         controls.screenSpacePanning = false;
         controls.minDistance = 20;
         controls.maxDistance = 200;
-        // Optimized for touch: default controls handle one-finger rotation and two-finger pinch-to-zoom.
+        updateVersionOverlay('1.03.00', 'Controls Active');
+    } else {
+        updateVersionOverlay('1.03.00', 'Controls FAIL');
+        console.warn("OrbitControls not loaded! Interaction disabled.");
     }
 }
 
