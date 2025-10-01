@@ -1,5 +1,4 @@
-// Main 3D environment setup with desert colors, lighting, shadows, touch controls optimized for iPhone,
-// ability to add primitives, apply textures from photo or file, toggle slow spin on objects.
+// main.js - 3D desert environment with mobile-friendly joystick controls, crosshair selection, and object interaction
 
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
@@ -8,17 +7,16 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
   // Scene setup
   const scene = new THREE.Scene();
 
-  // Desert floor color (Mars/Sahara)
+  // Ground plane
   const desertColor = 0xcc6633;
-  const desertGround = new THREE.Mesh(
-    new THREE.PlaneGeometry(1000, 1000),
-    new THREE.MeshStandardMaterial({ color: desertColor })
-  );
-  desertGround.rotation.x = -Math.PI / 2;
-  desertGround.receiveShadow = true;
-  scene.add(desertGround);
+  const groundGeometry = new THREE.PlaneGeometry(1000, 1000);
+  const groundMaterial = new THREE.MeshStandardMaterial({ color: desertColor, roughness: 1, metalness: 0 });
+  const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+  ground.rotation.x = -Math.PI / 2;
+  ground.receiveShadow = true;
+  scene.add(ground);
 
-  // Camera setup
+  // Camera
   const camera = new THREE.PerspectiveCamera(
     60,
     window.innerWidth / window.innerHeight,
@@ -27,10 +25,10 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
   );
   camera.position.set(0, 15, 25);
 
-  // Renderer setup
+  // Renderer
   const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
   renderer.setSize(window.innerWidth, window.innerHeight);
-  renderer.setClearColor(0xb35f3b); // Martian sky color
+  renderer.setClearColor(0xb35f3b);
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   document.body.appendChild(renderer.domElement);
@@ -50,19 +48,19 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
   const ambientLight = new THREE.AmbientLight(0xffccaa, 0.3);
   scene.add(ambientLight);
 
-  // Controls optimized for touch (OrbitControls supports touch)
+  // Controls - OrbitControls for rotation/look
   const controls = new OrbitControls(camera, renderer.domElement);
   controls.enableDamping = true;
   controls.dampingFactor = 0.1;
   controls.minDistance = 5;
   controls.maxDistance = 100;
-  controls.maxPolarAngle = Math.PI / 2 - 0.05; // Prevent going below ground
+  controls.maxPolarAngle = Math.PI / 2 - 0.05;
 
-  // Objects container
+  // Objects container and spinning set
   const objects = [];
   const spinningObjects = new Set();
 
-  // Primitive creation parameters
+  // UI elements
   const primitiveSelect = document.getElementById('primitive-select');
   const addPrimitiveBtn = document.getElementById('add-primitive-btn');
   const applyTextureSelect = document.getElementById('apply-texture-select');
@@ -76,14 +74,21 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
   // Texture loader
   const textureLoader = new THREE.TextureLoader();
 
-  // Utility: Add object to scene and UI selects
+  // Raycaster for selection
+  const raycaster = new THREE.Raycaster();
+
+  // Hover and selection tracking
+  let hoveredObject = null;
+  let selectedObject = null;
+
+  // Add object utility
   function addObject(obj, name) {
     obj.castShadow = true;
     obj.receiveShadow = true;
     scene.add(obj);
     objects.push({ obj, name });
 
-    // Add to selects
+    // Add to UI selects
     const opt1 = document.createElement('option');
     opt1.value = name;
     opt1.textContent = name;
@@ -95,7 +100,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
     spinObjectsSelect.appendChild(opt2);
   }
 
-  // Create primitive mesh by type
+  // Create primitive mesh
   function createPrimitive(type) {
     let geometry;
     switch (type) {
@@ -133,6 +138,21 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
     return mesh;
   }
 
+  // Prepopulate objects
+  function prepopulateObjects() {
+    const types = ['box', 'sphere', 'cone', 'cylinder', 'plane'];
+    for (let i = 0; i < 5; i++) {
+      const type = types[i % types.length];
+      const mesh = createPrimitive(type);
+      mesh.position.set(i * 6 - 12, mesh.geometry.parameters.height ? mesh.geometry.parameters.height / 2 : 1.5, 0);
+      const name = `prepop${i + 1}_${type}`;
+      mesh.name = name;
+      addObject(mesh, name);
+    }
+  }
+
+  prepopulateObjects();
+
   // Add primitive button handler
   addPrimitiveBtn.addEventListener('click', () => {
     const type = primitiveSelect.value;
@@ -142,9 +162,8 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
     addObject(mesh, name);
   });
 
-  // Apply texture from image file input
+  // Texture loading
   let loadedTexture = null;
-
   textureInput.addEventListener('change', (event) => {
     const file = event.target.files[0];
     if (!file) return;
@@ -157,21 +176,19 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
         alert('Texture loaded. Select an object and click "Apply Texture"');
       },
       undefined,
-      (err) => {
-        alert('Error loading texture image.');
-      }
+      () => alert('Error loading texture image.')
     );
   });
 
-  // Apply texture button handler
+  // Apply texture button
   applyTextureBtn.addEventListener('click', () => {
     const objName = applyTextureSelect.value;
     if (!objName) {
-      alert('Please select an object to apply texture.');
+      alert('Select an object to apply texture.');
       return;
     }
     if (!loadedTexture) {
-      alert('Please load a texture image first.');
+      alert('Load a texture image first.');
       return;
     }
     const objectData = objects.find((o) => o.name === objName);
@@ -181,11 +198,11 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
     objectData.obj.material.needsUpdate = true;
   });
 
-  // Spin toggle button handler
+  // Spin toggle button
   toggleSpinBtn.addEventListener('click', () => {
     const objName = spinObjectsSelect.value;
     if (!objName) {
-      alert('Please select an object to toggle spin.');
+      alert('Select an object to toggle spin.');
       return;
     }
     const objData = objects.find((o) => o.name === objName);
@@ -198,37 +215,31 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
     }
   });
 
-  // Capture photo button handler
+  // Capture photo button
   capturePhotoBtn.addEventListener('click', async () => {
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-      alert('Camera API not supported on this device.');
+      alert('Camera API not supported.');
       return;
     }
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ video: true });
       video.srcObject = stream;
-
-      // Show video briefly for capture
       video.style.display = 'block';
 
-      // Wait for video to be ready
       await new Promise((res) => {
         video.onloadedmetadata = () => res();
       });
 
-      // Capture frame to canvas
       const canvas = document.createElement('canvas');
       canvas.width = video.videoWidth;
       canvas.height = video.videoHeight;
       const ctx = canvas.getContext('2d');
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-      // Stop video stream
       stream.getTracks().forEach((track) => track.stop());
       video.style.display = 'none';
 
-      // Load texture from canvas
       const dataUrl = canvas.toDataURL();
       textureLoader.load(
         dataUrl,
@@ -237,13 +248,91 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
           alert('Photo captured and texture loaded. Select an object and click "Apply Texture".');
         },
         undefined,
-        (err) => {
-          alert('Failed to load texture from photo.');
-        }
+        () => alert('Failed to load texture from photo.')
       );
-    } catch (e) {
-      alert('Camera access denied or error occurred.');
+    } catch {
+      alert('Camera access denied or error.');
     }
+  });
+
+  // Variables for joystick
+  const joystickContainer = document.getElementById('joystick-container');
+  const joystickStick = document.getElementById('joystick-stick');
+  const joystickBase = document.getElementById('joystick-base');
+  const joystickRadius = joystickBase.offsetWidth / 2;
+  let joystickPointerId = null;
+  let joystickCenter = { x: 0, y: 0 };
+  let joystickPos = { x: 0, y: 0 };
+  let joystickVector = { x: 0, y: 0 };
+
+  function setJoystickPosition(x, y) {
+    const rect = joystickBase.getBoundingClientRect();
+    joystickCenter.x = rect.left + rect.width / 2;
+    joystickCenter.y = rect.top + rect.height / 2;
+    joystickPointerId = null;
+    joystickPos.x = x;
+    joystickPos.y = y;
+    joystickStick.style.transform = `translate(${x}px, ${y}px)`;
+  }
+
+  joystickBase.addEventListener('touchstart', (event) => {
+    if (joystickPointerId !== null) return;
+    const touch = event.changedTouches[0];
+    joystickPointerId = touch.identifier;
+    setJoystickPosition(0, 0);
+  });
+
+  joystickBase.addEventListener('touchmove', (event) => {
+    if (joystickPointerId === null) return;
+    for (let i = 0; i < event.changedTouches.length; i++) {
+      if (event.changedTouches[i].identifier === joystickPointerId) {
+        const touch = event.changedTouches[i];
+        const deltaX = touch.clientX - joystickCenter.x;
+        const deltaY = touch.clientY - joystickCenter.y;
+        const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+        const maxDistance = joystickRadius;
+
+        let clampedX = deltaX;
+        let clampedY = deltaY;
+        if (distance > maxDistance) {
+          const angle = Math.atan2(deltaY, deltaX);
+          clampedX = Math.cos(angle) * maxDistance;
+          clampedY = Math.sin(angle) * maxDistance;
+        }
+
+        joystickPos.x = clampedX;
+        joystickPos.y = clampedY;
+        joystickStick.style.transform = `translate(${clampedX}px, ${clampedY}px)`;
+
+        joystickVector.x = clampedX / maxDistance;
+        joystickVector.y = clampedY / maxDistance;
+        event.preventDefault();
+        return;
+      }
+    }
+  }, { passive: false });
+
+  joystickBase.addEventListener('touchend', (event) => {
+    for (let i = 0; i < event.changedTouches.length; i++) {
+      if (event.changedTouches[i].identifier === joystickPointerId) {
+        joystickPointerId = null;
+        joystickPos.x = 0;
+        joystickPos.y = 0;
+        joystickVector.x = 0;
+        joystickVector.y = 0;
+        joystickStick.style.transform = `translate(0px, 0px)`;
+        return;
+      }
+    }
+  });
+
+  joystickBase.addEventListener('touchcancel', () => {
+    joystickPointerId = null;
+    joystickPos.x = 0;
+    joystickPos.y = 0;
+    joystickVector.x = 0;
+    joystickVector.y = 0;
+    joystickStick.style.transform = `translate(0px, 0px)`;
   });
 
   // Animate loop
@@ -254,22 +343,104 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 
     controls.update();
 
-    // Rotate spinning objects slowly
+    // Mobile joystick movement
+    if (joystickVector.x !== 0 || joystickVector.y !== 0) {
+      // Move camera relative to current view direction
+      const forward = new THREE.Vector3();
+      camera.getWorldDirection(forward);
+      forward.y = 0;
+      forward.normalize();
+
+      const right = new THREE.Vector3();
+      right.crossVectors(camera.up, forward).normalize();
+
+      // joystickVector.y is vertical axis: negative is forward (up), positive backward (down)
+      // joystickVector.x is horizontal axis: positive is right, negative left
+      const moveSpeed = 0.15;
+
+      camera.position.addScaledVector(forward, -joystickVector.y * moveSpeed);
+      camera.position.addScaledVector(right, joystickVector.x * moveSpeed);
+
+      // Keep camera above ground
+      if (camera.position.y < 1.2) camera.position.y = 1.2;
+    }
+
+    // Spin selected objects
     const delta = clock.getDelta();
     spinningObjects.forEach((obj) => {
       obj.rotation.y += delta * 0.2;
     });
+
+    // Raycast from center to detect hovered object
+    raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
+    const intersects = raycaster.intersectObjects(objects.map(o => o.obj));
+
+    if (intersects.length > 0) {
+      const intersected = intersects[0].object;
+      if (hoveredObject !== intersected) {
+        if (hoveredObject && hoveredObject !== selectedObject) {
+          hoveredObject.material.emissive.set(0x000000);
+          hoveredObject.material.emissiveIntensity = 0;
+        }
+        hoveredObject = intersected;
+        if (hoveredObject !== selectedObject) {
+          hoveredObject.material.emissive.set('turquoise');
+          hoveredObject.material.emissiveIntensity = 0.6;
+        }
+      }
+    } else {
+      if (hoveredObject && hoveredObject !== selectedObject) {
+        hoveredObject.material.emissive.set(0x000000);
+        hoveredObject.material.emissiveIntensity = 0;
+      }
+      hoveredObject = null;
+    }
 
     renderer.render(scene, camera);
   }
 
   animate();
 
-  // Handle window resize
+  // Window resize
   window.addEventListener('resize', () => {
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
 
     renderer.setSize(window.innerWidth, window.innerHeight);
+  });
+
+  // Selection on tap/click
+  window.addEventListener('touchend', (event) => {
+    // On mobile tap, select hovered object
+    if (hoveredObject && hoveredObject !== selectedObject) {
+      if (selectedObject) {
+        selectedObject.material.emissive.set(0x000000);
+        selectedObject.material.emissiveIntensity = 0;
+      }
+      selectedObject = hoveredObject;
+      selectedObject.material.emissive.set('turquoise');
+      selectedObject.material.emissiveIntensity = 1;
+    } else if (!hoveredObject && selectedObject) {
+      selectedObject.material.emissive.set(0x000000);
+      selectedObject.material.emissiveIntensity = 0;
+      selectedObject = null;
+    }
+  });
+
+  // Also support mouse click selection for desktop
+  window.addEventListener('click', () => {
+    if (hoveredObject && hoveredObject !== selectedObject) {
+      if (selectedObject) {
+        selectedObject.material.emissive.set(0x000000);
+        selectedObject.material.emissiveIntensity = 0;
+      }
+      selectedObject = hoveredObject;
+      selectedObject.material.emissive.set('turquoise');
+      selectedObject.material.emissiveIntensity = 1;
+    } else if (!hoveredObject && selectedObject) {
+      selectedObject.material.emissive.set(0x000000);
+      selectedObject.material.emissiveIntensity = 0;
+      selectedObject = null;
+    }
   });
 })();
