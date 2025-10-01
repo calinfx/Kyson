@@ -1,32 +1,45 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>3D Data-Space Visualization</title>
-    <style>
-        body { margin: 0; overflow: hidden; background-color: #000; }
-        /* Style for the debug overlay */
-        #version-overlay {
-            position: absolute;
-            top: 10px;
-            left: 10px;
-            color: #9900FF; /* Neon Purple */
-            font-family: monospace;
-            font-size: 14px;
-            z-index: 100;
-        }
-    </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <title>3D Desert Environment</title>
+  <link rel="stylesheet" href="style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/examples/js/controls/OrbitControls.min.js"></script>
 </head>
 <body>
-    
-    <div id="version-overlay">
-        Project Version: 1.06.00
+  <div id="ui">
+    <div>
+      <label for="primitive-select">Add Primitive:</label>
+      <select id="primitive-select">
+        <option value="box">Box</option>
+        <option value="sphere">Sphere</option>
+        <option value="cone">Cone</option>
+        <option value="cylinder">Cylinder</option>
+        <option value="plane">Plane (rectangle)</option>
+      </select>
+      <button id="add-primitive-btn">Add</button>
     </div>
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <script src="https://unpkg.com/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <div>
+      <label for="texture-input">Load Texture Image:</label>
+      <input type="file" id="texture-input" accept="image/*" />
+    </div>
 
-    <script src="main.js"></script>
-</body>
-</html>
+    <div>
+      <button id="capture-photo-btn">Capture Photo (Apply as Texture)</button>
+    </div>
+
+    <div>
+      <label for="apply-texture-select">Apply Texture To:</label>
+      <select id="apply-texture-select">
+        <option value="">-- Select Object --</option>
+      </select>
+      <button id="apply-texture-btn">Apply Texture</button>
+    </div>
+
+    <div>
+      <label for="spin-objects-select">Toggle Spin On:</label>
+      <select id="spin-objects-select">
+        <option value="">-- Select Object
