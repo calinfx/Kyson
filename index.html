@@ -1,621 +1,644 @@
-import React, { useEffect, useRef, useState, useCallback } from ‘react’;
-import * as THREE from ‘three’;
+<!DOCTYPE html>
 
-export default function VoxelBuilder() {
-const containerRef = useRef(null);
-const sceneRef = useRef(null);
-const cameraRef = useRef(null);
-const rendererRef = useRef(null);
-const voxelsRef = useRef(new Map());
-const labelsRef = useRef(new Map());
-const moveJoyRef = useRef({ x: 0, y: 0, active: false });
-const lookJoyRef = useRef({ x: 0, y: 0, active: false });
-const yawRef = useRef(0);
-const pitchRef = useRef(0);
-const keysRef = useRef({});
-
-const [mode, setMode] = useState(‘build’);
-const [labelText, setLabelText] = useState(’’);
-const [showControls, setShowControls] = useState(true);
-const [selectedColor, setSelectedColor] = useState(’#ff00ff’);
-
-const colors = [
-{ name: ‘Magenta’, value: ‘#ff00ff’ },
-{ name: ‘Cyan’, value: ‘#00ffff’ },
-{ name: ‘Yellow’, value: ‘#ffff00’ },
-{ name: ‘Orange’, value: ‘#ff6d00’ },
-{ name: ‘Purple’, value: ‘#9d4edd’ }
-];
-
-const handleJoystickMove = useCallback((e, isMove) => {
-e.preventDefault();
-e.stopPropagation();
-const touch = e.touches[0];
-if (!touch) return;
-
-```
-const rect = e.currentTarget.getBoundingClientRect();
-const centerX = rect.left + rect.width / 2;
-const centerY = rect.top + rect.height / 2;
-const deltaX = touch.clientX - centerX;
-const deltaY = touch.clientY - centerY;
-const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
-const maxDist = rect.width / 2;
-const clampedDist = Math.min(distance, maxDist);
-const angle = Math.atan2(deltaY, deltaX);
-const normX = (clampedDist / maxDist) * Math.cos(angle);
-const normY = (clampedDist / maxDist) * Math.sin(angle);
-
-if (isMove) {
-  moveJoyRef.current = { x: normX, y: normY, active: true };
-} else {
-  lookJoyRef.current = { x: normX, y: normY, active: true };
-}
-```
-
-}, []);
-
-const handleJoystickEnd = useCallback((isMove) => {
-if (isMove) {
-moveJoyRef.current = { x: 0, y: 0, active: false };
-} else {
-lookJoyRef.current = { x: 0, y: 0, active: false };
-}
-}, []);
-
-useEffect(() => {
-if (!containerRef.current || sceneRef.current) return;
-
-```
-const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x000000);
-sceneRef.current = scene;
-
-const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-camera.position.set(0, 10, 20);
-cameraRef.current = camera;
-
-const renderer = new THREE.WebGLRenderer({ antialias: true });
-renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.shadowMap.enabled = true;
-containerRef.current.appendChild(renderer.domElement);
-rendererRef.current = renderer;
-
-const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
-scene.add(ambientLight);
-
-const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
-dirLight.position.set(50, 50, 50);
-dirLight.castShadow = true;
-scene.add(dirLight);
-
-const pointLight1 = new THREE.PointLight(0xff00ff, 0.6, 100);
-pointLight1.position.set(-30, 20, -30);
-scene.add(pointLight1);
-
-const pointLight2 = new THREE.PointLight(0x00ffff, 0.6, 100);
-pointLight2.position.set(30, 20, 30);
-scene.add(pointLight2);
-
-const groundGeo = new THREE.PlaneGeometry(100, 100);
-const groundMat = new THREE.MeshStandardMaterial({ 
-  color: 0x0a0a0a,
-  roughness: 0.8
-});
-const ground = new THREE.Mesh(groundGeo, groundMat);
-ground.rotation.x = -Math.PI / 2;
-ground.receiveShadow = true;
-ground.name = 'ground';
-scene.add(ground);
-
-const gridHelper = new THREE.GridHelper(100, 50, 0xff00ff, 0x333333);
-scene.add(gridHelper);
-
-const voxelSize = 2;
-const geometry = new THREE.BoxGeometry(voxelSize, voxelSize, voxelSize);
-
-const outlineGeo = new THREE.EdgesGeometry(geometry);
-const outlineMat = new THREE.LineBasicMaterial({ color: 0xff0000, linewidth: 3 });
-const outlineBox = new THREE.LineSegments(outlineGeo, outlineMat);
-outlineBox.visible = false;
-scene.add(outlineBox);
-
-const crosshairDiv = document.createElement('div');
-crosshairDiv.style.position = 'fixed';
-crosshairDiv.style.top = '50%';
-crosshairDiv.style.left = '50%';
-crosshairDiv.style.transform = 'translate(-50%, -50%)';
-crosshairDiv.style.width = '24px';
-crosshairDiv.style.height = '24px';
-crosshairDiv.style.pointerEvents = 'none';
-crosshairDiv.style.zIndex = '999';
-crosshairDiv.innerHTML = `
-  <svg width="24" height="24" viewBox="0 0 24 24">
-    <circle cx="12" cy="12" r="2" fill="none" stroke="#ff0000" stroke-width="2"/>
-    <line x1="12" y1="2" x2="12" y2="8" stroke="#ff0000" stroke-width="2"/>
-    <line x1="12" y1="16" x2="12" y2="22" stroke="#ff0000" stroke-width="2"/>
-    <line x1="2" y1="12" x2="8" y2="12" stroke="#ff0000" stroke-width="2"/>
-    <line x1="16" y1="12" x2="22" y2="12" stroke="#ff0000" stroke-width="2"/>
-  </svg>
-`;
-document.body.appendChild(crosshairDiv);
-
-const raycaster = new THREE.Raycaster();
-const centerScreen = new THREE.Vector2(0, 0);
-
-// Keyboard
-const onKeyDown = (e) => { 
-  keysRef.current[e.code] = true;
-};
-const onKeyUp = (e) => { 
-  keysRef.current[e.code] = false;
-};
-
-const onInteract = (e) => {
-  if (e.target.closest('.joystick') || e.target.closest('.ui-panel')) return;
-
-  raycaster.setFromCamera(centerScreen, camera);
-  const objects = Array.from(voxelsRef.current.values());
-  objects.push(ground);
-  
-  const intersects = raycaster.intersectObjects(objects);
-
-  if (intersects.length > 0) {
-    const intersect = intersects[0];
-    
-    if (mode === 'remove' && intersect.object.name !== 'ground') {
-      scene.remove(intersect.object);
-      for (let [key, obj] of voxelsRef.current.entries()) {
-        if (obj === intersect.object) {
-          voxelsRef.current.delete(key);
-          const label = labelsRef.current.get(key);
-          if (label) {
-            scene.remove(label);
-            labelsRef.current.delete(key);
-          }
-          break;
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Voxel Builder</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
         }
-      }
-    } else if (mode === 'build' && intersect.face) {
-      const intersectPoint = new THREE.Vector3();
-      intersectPoint.copy(intersect.point).add(intersect.face.normal);
-      intersectPoint.divideScalar(voxelSize).floor().multiplyScalar(voxelSize).addScalar(voxelSize / 2);
-      
-      const key = `${intersectPoint.x},${intersectPoint.y},${intersectPoint.z}`;
-      
-      if (!voxelsRef.current.has(key)) {
-        const mat = new THREE.MeshStandardMaterial({ 
-          color: selectedColor,
-          roughness: 0.5,
-          metalness: 0.3
-        });
-        const voxel = new THREE.Mesh(geometry, mat);
-        voxel.position.copy(intersectPoint);
-        voxel.castShadow = true;
-        voxel.receiveShadow = true;
-        scene.add(voxel);
-        voxelsRef.current.set(key, voxel);
-      }
-    } else if (mode === 'floatlabel' && intersect.object.name !== 'ground' && labelText) {
-      const key = `${intersect.object.position.x},${intersect.object.position.y},${intersect.object.position.z}`;
-      
-      const oldLabel = labelsRef.current.get(key);
-      if (oldLabel) scene.remove(oldLabel);
-      
-      const canvas = document.createElement('canvas');
-      canvas.width = 512;
-      canvas.height = 256;
-      const ctx = canvas.getContext('2d');
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.9)';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-      ctx.strokeStyle = '#ff00ff';
-      ctx.lineWidth = 8;
-      ctx.strokeRect(0, 0, canvas.width, canvas.height);
-      ctx.fillStyle = '#00ffff';
-      ctx.font = 'bold 56px Arial';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(labelText, canvas.width / 2, canvas.height / 2);
-      
-      const texture = new THREE.CanvasTexture(canvas);
-      const spriteMat = new THREE.SpriteMaterial({ map: texture });
-      const sprite = new THREE.Sprite(spriteMat);
-      sprite.position.copy(intersect.object.position);
-      sprite.position.y += voxelSize * 1.2;
-      sprite.scale.set(4, 2, 1);
-      scene.add(sprite);
-      labelsRef.current.set(key, sprite);
-    } else if (mode === 'surfacelabel' && intersect.face && labelText) {
-      const canvas = document.createElement('canvas');
-      canvas.width = 512;
-      canvas.height = 512;
-      const ctx = canvas.getContext('2d');
-      ctx.fillStyle = '#000000';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-      ctx.fillStyle = '#ffff00';
-      ctx.font = 'bold 64px Arial';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(labelText, canvas.width / 2, canvas.height / 2);
-      
-      const texture = new THREE.CanvasTexture(canvas);
-      const planeMat = new THREE.MeshBasicMaterial({ 
-        map: texture, 
-        side: THREE.DoubleSide,
-        transparent: true
-      });
-      const planeGeo = new THREE.PlaneGeometry(voxelSize * 0.95, voxelSize * 0.95);
-      const plane = new THREE.Mesh(planeGeo, planeMat);
-      
-      const normal = intersect.face.normal;
-      const pos = intersect.point.clone().add(normal.clone().multiplyScalar(0.01));
-      plane.position.copy(pos);
-      
-      if (Math.abs(normal.y) > 0.9) {
-        plane.rotation.x = normal.y > 0 ? -Math.PI / 2 : Math.PI / 2;
-      } else if (Math.abs(normal.x) > 0.9) {
-        plane.rotation.y = normal.x > 0 ? Math.PI / 2 : -Math.PI / 2;
-      } else if (Math.abs(normal.z) > 0.9) {
-        plane.rotation.y = normal.z > 0 ? 0 : Math.PI;
-      }
-      
-      scene.add(plane);
-      const labelKey = `surface_${Date.now()}`;
-      labelsRef.current.set(labelKey, plane);
-    }
-  }
-};
-
-document.addEventListener('keydown', onKeyDown);
-document.addEventListener('keyup', onKeyUp);
-renderer.domElement.addEventListener('click', onInteract);
-
-// Starter platform
-for (let i = -3; i <= 3; i++) {
-  for (let j = -3; j <= 3; j++) {
-    const pos = new THREE.Vector3(i * voxelSize, voxelSize / 2, j * voxelSize);
-    const key = `${pos.x},${pos.y},${pos.z}`;
-    const colorPalette = ['#ff00ff', '#00ffff', '#ffff00', '#ff6d00', '#9d4edd'];
-    const color = colorPalette[Math.floor(Math.random() * colorPalette.length)];
-    const mat = new THREE.MeshStandardMaterial({ 
-      color: color,
-      roughness: 0.5,
-      metalness: 0.3
-    });
-    const voxel = new THREE.Mesh(geometry, mat);
-    voxel.position.copy(pos);
-    voxel.castShadow = true;
-    voxel.receiveShadow = true;
-    scene.add(voxel);
-    voxelsRef.current.set(key, voxel);
-  }
-}
-
-const moveSpeed = 0.3;
-let animationId;
-
-const animate = () => {
-  animationId = requestAnimationFrame(animate);
-
-  // Look controls
-  if (lookJoyRef.current.active) {
-    yawRef.current -= lookJoyRef.current.x * 0.05;
-    pitchRef.current -= lookJoyRef.current.y * 0.05;
-    pitchRef.current = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, pitchRef.current));
-  }
-
-  camera.rotation.order = 'YXZ';
-  camera.rotation.y = yawRef.current;
-  camera.rotation.x = pitchRef.current;
-
-  // Movement
-  const velocity = new THREE.Vector3();
-
-  if (keysRef.current['KeyW']) velocity.z -= 1;
-  if (keysRef.current['KeyS']) velocity.z += 1;
-  if (keysRef.current['KeyA']) velocity.x -= 1;
-  if (keysRef.current['KeyD']) velocity.x += 1;
-  if (keysRef.current['Space']) velocity.y += 1;
-  if (keysRef.current['ShiftLeft']) velocity.y -= 1;
-
-  if (moveJoyRef.current.active) {
-    velocity.x += moveJoyRef.current.x;
-    velocity.z += moveJoyRef.current.y;
-  }
-
-  if (velocity.length() > 0) {
-    velocity.normalize().multiplyScalar(moveSpeed);
-    
-    const forward = new THREE.Vector3(0, 0, -1);
-    forward.applyQuaternion(camera.quaternion);
-    forward.y = 0;
-    forward.normalize();
-    
-    const right = new THREE.Vector3(1, 0, 0);
-    right.applyQuaternion(camera.quaternion);
-    right.y = 0;
-    right.normalize();
-
-    camera.position.addScaledVector(forward, -velocity.z);
-    camera.position.addScaledVector(right, velocity.x);
-    camera.position.y += velocity.y;
-  }
-
-  // Raycaster for outline
-  raycaster.setFromCamera(centerScreen, camera);
-  const objects = Array.from(voxelsRef.current.values());
-  objects.push(ground);
-  const intersects = raycaster.intersectObjects(objects);
-
-  if (intersects.length > 0) {
-    const intersect = intersects[0];
-    if (mode === 'build' && intersect.face) {
-      const intersectPoint = new THREE.Vector3();
-      intersectPoint.copy(intersect.point).add(intersect.face.normal);
-      intersectPoint.divideScalar(voxelSize).floor().multiplyScalar(voxelSize).addScalar(voxelSize / 2);
-      outlineBox.position.copy(intersectPoint);
-      outlineBox.visible = true;
-    } else if (intersect.object.name !== 'ground') {
-      outlineBox.position.copy(intersect.object.position);
-      outlineBox.visible = true;
-    } else {
-      outlineBox.visible = false;
-    }
-  } else {
-    outlineBox.visible = false;
-  }
-
-  renderer.render(scene, camera);
-};
-
-animate();
-
-const onResize = () => {
-  camera.aspect = window.innerWidth / window.innerHeight;
-  camera.updateProjectionMatrix();
-  renderer.setSize(window.innerWidth, window.innerHeight);
-};
-window.addEventListener('resize', onResize);
-
-return () => {
-  cancelAnimationFrame(animationId);
-  document.removeEventListener('keydown', onKeyDown);
-  document.removeEventListener('keyup', onKeyUp);
-  window.removeEventListener('resize', onResize);
-  renderer.domElement.removeEventListener('click', onInteract);
-  document.body.removeChild(crosshairDiv);
-  if (containerRef.current && renderer.domElement.parentNode === containerRef.current) {
-    containerRef.current.removeChild(renderer.domElement);
-  }
-};
-```
-
-}, []);
-
-return (
-<div style={{ width: ‘100vw’, height: ‘100vh’, overflow: ‘hidden’, background: ‘#000’ }}>
-<div ref={containerRef} style={{ width: ‘100%’, height: ‘100%’ }} />
+        body {
+            overflow: hidden;
+            background: #000;
+            font-family: Arial, sans-serif;
+        }
+        #container {
+            width: 100vw;
+            height: 100vh;
+        }
+        .joystick {
+            position: fixed;
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            z-index: 1000;
+            touch-action: none;
+        }
+        #moveJoy {
+            bottom: 30px;
+            left: 30px;
+            background: radial-gradient(circle, rgba(0,0,0,0.8) 0%, rgba(255,0,255,0.3) 100%);
+            border: 4px solid #ff00ff;
+        }
+        #lookJoy {
+            bottom: 30px;
+            right: 30px;
+            background: radial-gradient(circle, rgba(0,0,0,0.8) 0%, rgba(0,255,255,0.3) 100%);
+            border: 4px solid #00ffff;
+        }
+        .joystick-center {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            border: 3px solid #000;
+            pointer-events: none;
+        }
+        #moveJoy .joystick-center {
+            background: #ff00ff;
+        }
+        #lookJoy .joystick-center {
+            background: #00ffff;
+        }
+        #crosshair {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 24px;
+            height: 24px;
+            pointer-events: none;
+            z-index: 999;
+        }
+        #controls {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            background: #000;
+            padding: 15px;
+            border-radius: 10px;
+            border: 3px solid #ff00ff;
+            color: #00ffff;
+            z-index: 1000;
+            max-width: 300px;
+        }
+        #controls.hidden {
+            display: none;
+        }
+        #controls h3 {
+            margin: 0 0 12px 0;
+            color: #ff00ff;
+        }
+        #controls h4 {
+            margin: 0 0 8px 0;
+            color: #ff00ff;
+            font-size: 14px;
+        }
+        .close-btn {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            background: #000;
+            border: 2px solid #ff00ff;
+            color: #ff00ff;
+            cursor: pointer;
+            font-size: 18px;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .mode-buttons {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 15px;
+        }
+        .mode-btn {
+            padding: 8px 12px;
+            background: #000;
+            border: 2px solid #ff00ff;
+            color: #ff00ff;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        .mode-btn.active {
+            background: #ff00ff;
+            color: #000;
+        }
+        .mode-btn.cyan {
+            border-color: #00ffff;
+            color: #00ffff;
+        }
+        .mode-btn.cyan.active {
+            background: #00ffff;
+            color: #000;
+        }
+        .mode-btn.yellow {
+            border-color: #ffff00;
+            color: #ffff00;
+        }
+        .mode-btn.yellow.active {
+            background: #ffff00;
+            color: #000;
+        }
+        .color-buttons {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-bottom: 15px;
+        }
+        .color-btn {
+            width: 40px;
+            height: 40px;
+            border-radius: 5px;
+            border: 2px solid #000;
+            cursor: pointer;
+        }
+        .color-btn.active {
+            border: 3px solid #fff;
+            box-shadow: 0 0 10px currentColor;
+        }
+        #labelInput {
+            width: 100%;
+            padding: 8px;
+            background: #000;
+            border: 2px solid #ff00ff;
+            color: #00ffff;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+        .info {
+            margin-top: 15px;
+            font-size: 11px;
+            color: #00ffff;
+        }
+        .info strong {
+            color: #ff00ff;
+        }
+        #menuBtn {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            padding: 12px 18px;
+            background: #000;
+            border: 3px solid #ff00ff;
+            color: #ff00ff;
+            border-radius: 8px;
+            cursor: pointer;
+            z-index: 1000;
+            font-size: 20px;
+            font-weight: bold;
+            display: none;
+        }
+        #menuBtn.visible {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <div id="container"></div>
 
 ```
-  {/* Move joystick */}
-  <div
-    className="joystick"
-    onTouchStart={(e) => handleJoystickMove(e, true)}
-    onTouchMove={(e) => handleJoystickMove(e, true)}
-    onTouchEnd={() => handleJoystickEnd(true)}
-    style={{
-      position: 'fixed',
-      bottom: '30px',
-      left: '30px',
-      width: '120px',
-      height: '120px',
-      borderRadius: '50%',
-      background: 'radial-gradient(circle, rgba(0,0,0,0.8) 0%, rgba(255,0,255,0.3) 100%)',
-      border: '4px solid #ff00ff',
-      zIndex: 1000,
-      touchAction: 'none'
-    }}
-  >
-    <div style={{
-      position: 'absolute',
-      top: '50%',
-      left: '50%',
-      transform: 'translate(-50%, -50%)',
-      width: '40px',
-      height: '40px',
-      borderRadius: '50%',
-      background: '#ff00ff',
-      border: '3px solid #000',
-      pointerEvents: 'none'
-    }} />
-  </div>
-
-  {/* Look joystick */}
-  <div
-    className="joystick"
-    onTouchStart={(e) => handleJoystickMove(e, false)}
-    onTouchMove={(e) => handleJoystickMove(e, false)}
-    onTouchEnd={() => handleJoystickEnd(false)}
-    style={{
-      position: 'fixed',
-      bottom: '30px',
-      right: '30px',
-      width: '120px',
-      height: '120px',
-      borderRadius: '50%',
-      background: 'radial-gradient(circle, rgba(0,0,0,0.8) 0%, rgba(0,255,255,0.3) 100%)',
-      border: '4px solid #00ffff',
-      zIndex: 1000,
-      touchAction: 'none'
-    }}
-  >
-    <div style={{
-      position: 'absolute',
-      top: '50%',
-      left: '50%',
-      transform: 'translate(-50%, -50%)',
-      width: '40px',
-      height: '40px',
-      borderRadius: '50%',
-      background: '#00ffff',
-      border: '3px solid #000',
-      pointerEvents: 'none'
-    }} />
-  </div>
-
-  {/* Controls */}
-  <div className="ui-panel" style={{
-    position: 'fixed',
-    top: '20px',
-    left: '20px',
-    background: '#000',
-    padding: '15px',
-    borderRadius: '10px',
-    border: '3px solid #ff00ff',
-    color: '#00ffff',
-    zIndex: 1000,
-    display: showControls ? 'block' : 'none',
-    maxWidth: '300px'
-  }}>
-    <button 
-      onClick={(e) => {
-        e.stopPropagation();
-        setShowControls(false);
-      }} 
-      style={{
-        position: 'absolute',
-        top: '8px',
-        right: '8px',
-        background: '#000',
-        border: '2px solid #ff00ff',
-        color: '#ff00ff',
-        cursor: 'pointer',
-        fontSize: '18px',
-        width: '30px',
-        height: '30px',
-        borderRadius: '50%',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center'
-      }}>✕</button>
-    
-    <h3 style={{ margin: '0 0 12px 0', color: '#ff00ff' }}>MODE</h3>
-    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '15px' }}>
-      <button onClick={() => setMode('build')} style={{
-        padding: '8px 12px',
-        background: mode === 'build' ? '#ff00ff' : '#000',
-        border: '2px solid #ff00ff',
-        color: mode === 'build' ? '#000' : '#ff00ff',
-        borderRadius: '5px',
-        cursor: 'pointer',
-        fontSize: '12px',
-        fontWeight: 'bold'
-      }}>BUILD</button>
-      <button onClick={() => setMode('remove')} style={{
-        padding: '8px 12px',
-        background: mode === 'remove' ? '#ff00ff' : '#000',
-        border: '2px solid #ff00ff',
-        color: mode === 'remove' ? '#000' : '#ff00ff',
-        borderRadius: '5px',
-        cursor: 'pointer',
-        fontSize: '12px',
-        fontWeight: 'bold'
-      }}>REMOVE</button>
-      <button onClick={() => setMode('floatlabel')} style={{
-        padding: '8px 12px',
-        background: mode === 'floatlabel' ? '#00ffff' : '#000',
-        border: '2px solid #00ffff',
-        color: mode === 'floatlabel' ? '#000' : '#00ffff',
-        borderRadius: '5px',
-        cursor: 'pointer',
-        fontSize: '12px',
-        fontWeight: 'bold'
-      }}>FLOAT</button>
-      <button onClick={() => setMode('surfacelabel')} style={{
-        padding: '8px 12px',
-        background: mode === 'surfacelabel' ? '#ffff00' : '#000',
-        border: '2px solid #ffff00',
-        color: mode === 'surfacelabel' ? '#000' : '#ffff00',
-        borderRadius: '5px',
-        cursor: 'pointer',
-        fontSize: '12px',
-        fontWeight: 'bold'
-      }}>SURFACE</button>
-    </div>
-    
-    {mode === 'build' && (
-      <div style={{ marginBottom: '15px' }}>
-        <h4 style={{ margin: '0 0 8px 0', color: '#ff00ff' }}>COLOR</h4>
-        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-          {colors.map(c => (
-            <button
-              key={c.value}
-              onClick={() => setSelectedColor(c.value)}
-              style={{
-                width: '40px',
-                height: '40px',
-                borderRadius: '5px',
-                background: c.value,
-                border: selectedColor === c.value ? '3px solid #fff' : '2px solid #000',
-                cursor: 'pointer',
-                boxShadow: selectedColor === c.value ? '0 0 10px ' + c.value : 'none'
-              }}
-            />
-          ))}
-        </div>
-      </div>
-    )}
-    
-    {(mode === 'floatlabel' || mode === 'surfacelabel') && (
-      <div>
-        <input
-          type="text"
-          value={labelText}
-          onChange={(e) => setLabelText(e.target.value)}
-          placeholder="Label text"
-          style={{
-            width: '100%',
-            padding: '8px',
-            background: '#000',
-            border: '2px solid #ff00ff',
-            color: '#00ffff',
-            borderRadius: '5px',
-            fontSize: '14px'
-          }}
-        />
-      </div>
-    )}
-    
-    <div style={{ marginTop: '15px', fontSize: '11px', color: '#00ffff' }}>
-      <div><strong style={{color: '#ff00ff'}}>Desktop:</strong> WASD + Space/Shift</div>
-      <div><strong style={{color: '#ff00ff'}}>Mobile:</strong> Use joysticks</div>
-      <div>Click/tap to interact</div>
-    </div>
-  </div>
-
-  {!showControls && (
-    <button 
-      onClick={(e) => {
-        e.stopPropagation();
-        setShowControls(true);
-      }} 
-      style={{
-        position: 'fixed',
-        top: '20px',
-        left: '20px',
-        padding: '12px 18px',
-        background: '#000',
-        border: '3px solid #ff00ff',
-        color: '#ff00ff',
-        borderRadius: '8px',
-        cursor: 'pointer',
-        zIndex: 1000,
-        fontSize: '20px',
-        fontWeight: 'bold'
-      }}>☰</button>
-  )}
+<div id="crosshair">
+    <svg width="24" height="24" viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="2" fill="none" stroke="#ff0000" stroke-width="2"/>
+        <line x1="12" y1="2" x2="12" y2="8" stroke="#ff0000" stroke-width="2"/>
+        <line x1="12" y1="16" x2="12" y2="22" stroke="#ff0000" stroke-width="2"/>
+        <line x1="2" y1="12" x2="8" y2="12" stroke="#ff0000" stroke-width="2"/>
+        <line x1="16" y1="12" x2="22" y2="12" stroke="#ff0000" stroke-width="2"/>
+    </svg>
 </div>
+
+<div class="joystick" id="moveJoy">
+    <div class="joystick-center"></div>
+</div>
+
+<div class="joystick" id="lookJoy">
+    <div class="joystick-center"></div>
+</div>
+
+<div id="controls">
+    <button class="close-btn" onclick="toggleControls()">✕</button>
+    <h3>MODE</h3>
+    <div class="mode-buttons">
+        <button class="mode-btn active" onclick="setMode('build')">BUILD</button>
+        <button class="mode-btn" onclick="setMode('remove')">REMOVE</button>
+        <button class="mode-btn cyan" onclick="setMode('floatlabel')">FLOAT</button>
+        <button class="mode-btn yellow" onclick="setMode('surfacelabel')">SURFACE</button>
+    </div>
+    
+    <div id="colorSection">
+        <h4>COLOR</h4>
+        <div class="color-buttons">
+            <button class="color-btn active" style="background: #ff00ff;" onclick="setColor('#ff00ff')"></button>
+            <button class="color-btn" style="background: #00ffff;" onclick="setColor('#00ffff')"></button>
+            <button class="color-btn" style="background: #ffff00;" onclick="setColor('#ffff00')"></button>
+            <button class="color-btn" style="background: #ff6d00;" onclick="setColor('#ff6d00')"></button>
+            <button class="color-btn" style="background: #9d4edd;" onclick="setColor('#9d4edd')"></button>
+        </div>
+    </div>
+
+    <div id="labelSection" style="display: none;">
+        <input type="text" id="labelInput" placeholder="Label text">
+    </div>
+
+    <div class="info">
+        <div><strong>Desktop:</strong> WASD + Space/Shift</div>
+        <div><strong>Mobile:</strong> Use joysticks</div>
+        <div>Click/tap to interact</div>
+    </div>
+</div>
+
+<button id="menuBtn" onclick="toggleControls()">☰</button>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+    let scene, camera, renderer, ground, outlineBox;
+    let voxels = new Map();
+    let labels = new Map();
+    let mode = 'build';
+    let selectedColor = '#ff00ff';
+    let labelText = '';
+    
+    let yaw = 0;
+    let pitch = 0;
+    let keys = {};
+    let moveJoy = { x: 0, y: 0, active: false };
+    let lookJoy = { x: 0, y: 0, active: false };
+
+    const voxelSize = 2;
+
+    // Initialize scene
+    function init() {
+        scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x000000);
+
+        camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(0, 10, 20);
+
+        renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        document.getElementById('container').appendChild(renderer.domElement);
+
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+        scene.add(ambientLight);
+
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        dirLight.position.set(50, 50, 50);
+        dirLight.castShadow = true;
+        scene.add(dirLight);
+
+        const pointLight1 = new THREE.PointLight(0xff00ff, 0.6, 100);
+        pointLight1.position.set(-30, 20, -30);
+        scene.add(pointLight1);
+
+        const pointLight2 = new THREE.PointLight(0x00ffff, 0.6, 100);
+        pointLight2.position.set(30, 20, 30);
+        scene.add(pointLight2);
+
+        const groundGeo = new THREE.PlaneGeometry(100, 100);
+        const groundMat = new THREE.MeshStandardMaterial({ 
+            color: 0x0a0a0a,
+            roughness: 0.8
+        });
+        ground = new THREE.Mesh(groundGeo, groundMat);
+        ground.rotation.x = -Math.PI / 2;
+        ground.receiveShadow = true;
+        ground.name = 'ground';
+        scene.add(ground);
+
+        const gridHelper = new THREE.GridHelper(100, 50, 0xff00ff, 0x333333);
+        scene.add(gridHelper);
+
+        const geometry = new THREE.BoxGeometry(voxelSize, voxelSize, voxelSize);
+        const outlineGeo = new THREE.EdgesGeometry(geometry);
+        const outlineMat = new THREE.LineBasicMaterial({ color: 0xff0000, linewidth: 3 });
+        outlineBox = new THREE.LineSegments(outlineGeo, outlineMat);
+        outlineBox.visible = false;
+        scene.add(outlineBox);
+
+        // Create starter platform
+        const colorPalette = ['#ff00ff', '#00ffff', '#ffff00', '#ff6d00', '#9d4edd'];
+        for (let i = -3; i <= 3; i++) {
+            for (let j = -3; j <= 3; j++) {
+                const pos = new THREE.Vector3(i * voxelSize, voxelSize / 2, j * voxelSize);
+                const key = `${pos.x},${pos.y},${pos.z}`;
+                const color = colorPalette[Math.floor(Math.random() * colorPalette.length)];
+                const mat = new THREE.MeshStandardMaterial({ 
+                    color: color,
+                    roughness: 0.5,
+                    metalness: 0.3
+                });
+                const voxel = new THREE.Mesh(geometry, mat);
+                voxel.position.copy(pos);
+                voxel.castShadow = true;
+                voxel.receiveShadow = true;
+                scene.add(voxel);
+                voxels.set(key, voxel);
+            }
+        }
+
+        setupControls();
+        animate();
+    }
+
+    function setupControls() {
+        document.addEventListener('keydown', (e) => { keys[e.code] = true; });
+        document.addEventListener('keyup', (e) => { keys[e.code] = false; });
+        renderer.domElement.addEventListener('click', onClick);
+        window.addEventListener('resize', onResize);
+
+        // Joystick controls
+        const moveJoyEl = document.getElementById('moveJoy');
+        const lookJoyEl = document.getElementById('lookJoy');
+
+        function handleJoystick(e, isMove) {
+            e.preventDefault();
+            const touch = e.touches[0];
+            if (!touch) return;
+            
+            const rect = e.currentTarget.getBoundingClientRect();
+            const centerX = rect.left + rect.width / 2;
+            const centerY = rect.top + rect.height / 2;
+            const deltaX = touch.clientX - centerX;
+            const deltaY = touch.clientY - centerY;
+            const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+            const maxDist = rect.width / 2;
+            const clampedDist = Math.min(distance, maxDist);
+            const angle = Math.atan2(deltaY, deltaX);
+            const normX = (clampedDist / maxDist) * Math.cos(angle);
+            const normY = (clampedDist / maxDist) * Math.sin(angle);
+
+            if (isMove) {
+                moveJoy = { x: normX, y: normY, active: true };
+            } else {
+                lookJoy = { x: normX, y: normY, active: true };
+            }
+        }
+
+        moveJoyEl.addEventListener('touchstart', (e) => handleJoystick(e, true));
+        moveJoyEl.addEventListener('touchmove', (e) => handleJoystick(e, true));
+        moveJoyEl.addEventListener('touchend', () => { moveJoy = { x: 0, y: 0, active: false }; });
+
+        lookJoyEl.addEventListener('touchstart', (e) => handleJoystick(e, false));
+        lookJoyEl.addEventListener('touchmove', (e) => handleJoystick(e, false));
+        lookJoyEl.addEventListener('touchend', () => { lookJoy = { x: 0, y: 0, active: false }; });
+
+        document.getElementById('labelInput').addEventListener('input', (e) => {
+            labelText = e.target.value;
+        });
+    }
+
+    function onClick(e) {
+        const raycaster = new THREE.Raycaster();
+        const centerScreen = new THREE.Vector2(0, 0);
+        raycaster.setFromCamera(centerScreen, camera);
+        
+        const objects = Array.from(voxels.values());
+        objects.push(ground);
+        const intersects = raycaster.intersectObjects(objects);
+
+        if (intersects.length > 0) {
+            const intersect = intersects[0];
+            const geometry = new THREE.BoxGeometry(voxelSize, voxelSize, voxelSize);
+
+            if (mode === 'remove' && intersect.object.name !== 'ground') {
+                scene.remove(intersect.object);
+                for (let [key, obj] of voxels.entries()) {
+                    if (obj === intersect.object) {
+                        voxels.delete(key);
+                        const label = labels.get(key);
+                        if (label) {
+                            scene.remove(label);
+                            labels.delete(key);
+                        }
+                        break;
+                    }
+                }
+            } else if (mode === 'build' && intersect.face) {
+                const intersectPoint = new THREE.Vector3();
+                intersectPoint.copy(intersect.point).add(intersect.face.normal);
+                intersectPoint.divideScalar(voxelSize).floor().multiplyScalar(voxelSize).addScalar(voxelSize / 2);
+                
+                const key = `${intersectPoint.x},${intersectPoint.y},${intersectPoint.z}`;
+                
+                if (!voxels.has(key)) {
+                    const mat = new THREE.MeshStandardMaterial({ 
+                        color: selectedColor,
+                        roughness: 0.5,
+                        metalness: 0.3
+                    });
+                    const voxel = new THREE.Mesh(geometry, mat);
+                    voxel.position.copy(intersectPoint);
+                    voxel.castShadow = true;
+                    voxel.receiveShadow = true;
+                    scene.add(voxel);
+                    voxels.set(key, voxel);
+                }
+            } else if (mode === 'floatlabel' && intersect.object.name !== 'ground' && labelText) {
+                const key = `${intersect.object.position.x},${intersect.object.position.y},${intersect.object.position.z}`;
+                
+                const oldLabel = labels.get(key);
+                if (oldLabel) scene.remove(oldLabel);
+                
+                const canvas = document.createElement('canvas');
+                canvas.width = 512;
+                canvas.height = 256;
+                const ctx = canvas.getContext('2d');
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.9)';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.strokeStyle = '#ff00ff';
+                ctx.lineWidth = 8;
+                ctx.strokeRect(0, 0, canvas.width, canvas.height);
+                ctx.fillStyle = '#00ffff';
+                ctx.font = 'bold 56px Arial';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(labelText, canvas.width / 2, canvas.height / 2);
+                
+                const texture = new THREE.CanvasTexture(canvas);
+                const spriteMat = new THREE.SpriteMaterial({ map: texture });
+                const sprite = new THREE.Sprite(spriteMat);
+                sprite.position.copy(intersect.object.position);
+                sprite.position.y += voxelSize * 1.2;
+                sprite.scale.set(4, 2, 1);
+                scene.add(sprite);
+                labels.set(key, sprite);
+            } else if (mode === 'surfacelabel' && intersect.face && labelText) {
+                const canvas = document.createElement('canvas');
+                canvas.width = 512;
+                canvas.height = 512;
+                const ctx = canvas.getContext('2d');
+                ctx.fillStyle = '#000000';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.fillStyle = '#ffff00';
+                ctx.font = 'bold 64px Arial';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(labelText, canvas.width / 2, canvas.height / 2);
+                
+                const texture = new THREE.CanvasTexture(canvas);
+                const planeMat = new THREE.MeshBasicMaterial({ 
+                    map: texture, 
+                    side: THREE.DoubleSide,
+                    transparent: true
+                });
+                const planeGeo = new THREE.PlaneGeometry(voxelSize * 0.95, voxelSize * 0.95);
+                const plane = new THREE.Mesh(planeGeo, planeMat);
+                
+                const normal = intersect.face.normal;
+                const pos = intersect.point.clone().add(normal.clone().multiplyScalar(0.01));
+                plane.position.copy(pos);
+                
+                if (Math.abs(normal.y) > 0.9) {
+                    plane.rotation.x = normal.y > 0 ? -Math.PI / 2 : Math.PI / 2;
+                } else if (Math.abs(normal.x) > 0.9) {
+                    plane.rotation.y = normal.x > 0 ? Math.PI / 2 : -Math.PI / 2;
+                } else if (Math.abs(normal.z) > 0.9) {
+                    plane.rotation.y = normal.z > 0 ? 0 : Math.PI;
+                }
+                
+                scene.add(plane);
+                const labelKey = `surface_${Date.now()}`;
+                labels.set(labelKey, plane);
+            }
+        }
+    }
+
+    function animate() {
+        requestAnimationFrame(animate);
+
+        if (lookJoy.active) {
+            yaw -= lookJoy.x * 0.05;
+            pitch -= lookJoy.y * 0.05;
+            pitch = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, pitch));
+        }
+
+        camera.rotation.order = 'YXZ';
+        camera.rotation.y = yaw;
+        camera.rotation.x = pitch;
+
+        const velocity = new THREE.Vector3();
+        const moveSpeed = 0.3;
+
+        if (keys['KeyW']) velocity.z -= 1;
+        if (keys['KeyS']) velocity.z += 1;
+        if (keys['KeyA']) velocity.x -= 1;
+        if (keys['KeyD']) velocity.x += 1;
+        if (keys['Space']) velocity.y += 1;
+        if (keys['ShiftLeft']) velocity.y -= 1;
+
+        if (moveJoy.active) {
+            velocity.x += moveJoy.x;
+            velocity.z += moveJoy.y;
+        }
+
+        if (velocity.length() > 0) {
+            velocity.normalize().multiplyScalar(moveSpeed);
+            
+            const forward = new THREE.Vector3(0, 0, -1);
+            forward.applyQuaternion(camera.quaternion);
+            forward.y = 0;
+            forward.normalize();
+            
+            const right = new THREE.Vector3(1, 0, 0);
+            right.applyQuaternion(camera.quaternion);
+            right.y = 0;
+            right.normalize();
+
+            camera.position.addScaledVector(forward, -velocity.z);
+            camera.position.addScaledVector(right, velocity.x);
+            camera.position.y += velocity.y;
+        }
+
+        // Update outline
+        const raycaster = new THREE.Raycaster();
+        const centerScreen = new THREE.Vector2(0, 0);
+        raycaster.setFromCamera(centerScreen, camera);
+        const objects = Array.from(voxels.values());
+        objects.push(ground);
+        const intersects = raycaster.intersectObjects(objects);
+
+        if (intersects.length > 0) {
+            const intersect = intersects[0];
+            if (mode === 'build' && intersect.face) {
+                const intersectPoint = new THREE.Vector3();
+                intersectPoint.copy(intersect.point).add(intersect.face.normal);
+                intersectPoint.divideScalar(voxelSize).floor().multiplyScalar(voxelSize).addScalar(voxelSize / 2);
+                outlineBox.position.copy(intersectPoint);
+                outlineBox.visible = true;
+            } else if (intersect.object.name !== 'ground') {
+                outlineBox.position.copy(intersect.object.position);
+                outlineBox.visible = true;
+            } else {
+                outlineBox.visible = false;
+            }
+        } else {
+            outlineBox.visible = false;
+        }
+
+        renderer.render(scene, camera);
+    }
+
+    function onResize() {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+    }
+
+    function setMode(newMode) {
+        mode = newMode;
+        
+        // Update button states
+        document.querySelectorAll('.mode-btn').forEach(btn => {
+            btn.classList.remove('active');
+        });
+        event.target.classList.add('active');
+
+        // Show/hide sections
+        const colorSection = document.getElementById('colorSection');
+        const labelSection = document.getElementById('labelSection');
+        
+        if (mode === 'build') {
+            colorSection.style.display = 'block';
+            labelSection.style.display = 'none';
+        } else if (mode === 'floatlabel' || mode === 'surfacelabel') {
+            colorSection.style.display = 'none';
+            labelSection.style.display = 'block';
+        } else {
+            colorSection.style.display = 'none';
+            labelSection.style.display = 'none';
+        }
+    }
+
+    function setColor(color) {
+        selectedColor = color;
+        document.querySelectorAll('.color-btn').forEach(btn => {
+            btn.classList.remove('active');
+        });
+        event.target.classList.add('active');
+    }
+
+    function toggleControls() {
+        const controls = document.getElementById('controls');
+        const menuBtn = document.getElementById('menuBtn');
+        
+        if (controls.classList.contains('hidden')) {
+            controls.classList.remove('hidden');
+            menuBtn.classList.remove('visible');
+        } else {
+            controls.classList.add('hidden');
+            menuBtn.classList.add('visible');
+        }
+    }
+
+    // Start the app
+    init();
+</script>
 ```
 
-);
-}
+</body>
+</html>
